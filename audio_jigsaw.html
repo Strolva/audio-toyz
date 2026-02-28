@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Jigsaw Pro</title>
+    <style>
+        body { background: #0f172a; color: #38bdf8; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        #grid { display: grid; grid-template-columns: repeat(3, 120px); gap: 10px; background: #1e293b; padding: 15px; border-radius: 12px; }
+        .piece { width: 120px; height: 120px; background: #334155; cursor: grab; border-radius: 8px; position: relative; border: 2px solid transparent; overflow: hidden; }
+        .piece.correct { border-color: #38bdf8; box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
+        canvas { width: 100%; height: 100%; pointer-events: none; }
+        button { padding: 12px 24px; background: #38bdf8; color: #0f172a; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <button id="btn" onclick="init()">START AUDIO TOY</button>
+    <div id="grid"></div>
+    <script>
+        let audioCtx, mainBuffer;
+        let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
+
+        async function init() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('btn').innerText = "LOADING...";
+            try {
+                const resp = await fetch('mysound.mp3');
+                const data = await resp.arrayBuffer();
+                mainBuffer = await audioCtx.decodeAudioData(data);
+                document.getElementById('btn').style.display = 'none';
+                render();
+            } catch (e) {
+                alert("Security Error: To fix this, we need to upload this to a free site like GitHub or Netlify!");
+            }
+        }
+
+        function playSlice(idx) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = mainBuffer;
+            const dur = mainBuffer.duration / 9;
+            source.connect(audioCtx.destination);
+            source.start(0, idx * dur, dur);
+        }
+
+        function render() {
+            const container = document.getElementById('grid');
+            container.innerHTML = '';
+            pieces.forEach((pIdx, i) => {
+                const div = document.createElement('div');
+                div.className = `piece ${pIdx === i ? 'correct' : ''}`;
+                div.draggable = true;
+                
+                const cvs = document.createElement('canvas');
+                cvs.width = 120; cvs.height = 120;
+                div.appendChild(cvs);
+                
+                // Draw Waveform
+                const ctx = cvs.getContext('2d');
+                ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, 60);
+                for(let x=0; x<120; x++) {
+                    const gx = x + (pIdx * 120);
+                    ctx.lineTo(x, 60 + Math.sin(gx*0.05)*20);
+                }
+                ctx.stroke();
+
+                div.ondragstart = (e) => e.dataTransfer.setData('text', i);
+                div.ondragover = (e) => e.preventDefault();
+                div.ondrop = (e) => {
+                    const from = e.dataTransfer.getData('text');
+                    [pieces[from], pieces[i]] = [pieces[i], pieces[from]];
+                    playSlice(pIdx);
+                    render();
+                };
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
