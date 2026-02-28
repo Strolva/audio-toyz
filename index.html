@@ -15,64 +15,45 @@
     <button id="btn" onclick="init()">START AUDIO TOY</button>
     <div id="grid"></div>
     <script>
-        let audioCtx, mainBuffer;
-        let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
+      // New function to play the FULL reference track
+function playReference() {
+    if (!mainBuffer) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = mainBuffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+    
+    // Visual feedback that it's playing
+    document.getElementById('status').innerText = "👂 Listening to reference...";
+    source.onended = () => {
+        document.getElementById('status').innerText = "Now, reconstruct the wave!";
+    };
+}
 
-        async function init() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('btn').innerText = "LOADING...";
-            try {
-                const resp = await fetch('mysound.mp3');
-                const data = await resp.arrayBuffer();
-                mainBuffer = await audioCtx.decodeAudioData(data);
-                document.getElementById('btn').style.display = 'none';
-                render();
-            } catch (e) {
-                alert("Security Error: To fix this, we need to upload this to a free site like GitHub or Netlify!");
-            }
-        }
+// Update the render function to check for the win
+function render() {
+    const container = document.getElementById('grid');
+    container.innerHTML = '';
+    
+    // Check if solved
+    const isSolved = pieces.every((p, i) => p === i);
 
-        function playSlice(idx) {
-            const source = audioCtx.createBufferSource();
-            source.buffer = mainBuffer;
-            const dur = mainBuffer.duration / 9;
-            source.connect(audioCtx.destination);
-            source.start(0, idx * dur, dur);
-        }
+    pieces.forEach((pIdx, i) => {
+        const div = document.createElement('div');
+        div.className = `piece ${pIdx === i ? 'correct' : ''}`;
+        
+        // If solved, make the whole thing glow!
+        if(isSolved) div.style.boxShadow = "0 0 20px #38bdf8";
 
-        function render() {
-            const container = document.getElementById('grid');
-            container.innerHTML = '';
-            pieces.forEach((pIdx, i) => {
-                const div = document.createElement('div');
-                div.className = `piece ${pIdx === i ? 'correct' : ''}`;
-                div.draggable = true;
-                
-                const cvs = document.createElement('canvas');
-                cvs.width = 120; cvs.height = 120;
-                div.appendChild(cvs);
-                
-                // Draw Waveform
-                const ctx = cvs.getContext('2d');
-                ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(0, 60);
-                for(let x=0; x<120; x++) {
-                    const gx = x + (pIdx * 120);
-                    ctx.lineTo(x, 60 + Math.sin(gx*0.05)*20);
-                }
-                ctx.stroke();
+        // ... (rest of your drawing/drag logic) ...
+    });
 
-                div.ondragstart = (e) => e.dataTransfer.setData('text', i);
-                div.ondragover = (e) => e.preventDefault();
-                div.ondrop = (e) => {
-                    const from = e.dataTransfer.getData('text');
-                    [pieces[from], pieces[i]] = [pieces[i], pieces[from]];
-                    playSlice(pIdx);
-                    render();
-                };
-                container.appendChild(div);
-            });
-        }
+    if(isSolved) {
+        document.getElementById('status').innerText = "🎉 PERFECT HARMONY!";
+        playReference(); // Play the full song as a reward!
+    }
+}
     </script>
 </body>
 </html>
+
