@@ -43,20 +43,42 @@
         let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
 
         async function initAudio() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            status.innerText = "Loading...";
-            try {
-                const resp = await fetch('./mysound.mp3');
-                const data = await resp.arrayBuffer();
-                mainBuffer = await audioCtx.decodeAudioData(data);
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('refBtn').style.display = 'inline-block';
-                document.getElementById('stopBtn').style.display = 'inline-block';
-                document.getElementById('status').innerText = "Loaded! Arrange the waves.";
-                drawGhostWave();
-                render();
-            } catch (e) { document.getElementById('status').innerText = "File Error."; }
+    // 1. Create Audio Context
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    const status = document.getElementById('status');
+    status.innerText = "Step 1: Contacting Server...";
+
+    try {
+        // 2. Fetch the file
+        const resp = await fetch('./mysound.mp3');
+        
+        if (!resp.ok) {
+            throw new Error(`Server says file not found (404). Check your filename!`);
         }
+
+        status.innerText = "Step 2: Downloading Audio...";
+        const data = await resp.arrayBuffer();
+
+        status.innerText = "Step 3: Decoding Audio Data...";
+        mainBuffer = await audioCtx.decodeAudioData(data);
+        
+        // 4. Success!
+        document.getElementById('startBtn').style.display = 'none';
+        document.getElementById('refBtn').style.display = 'inline-block';
+        document.getElementById('stopBtn').style.display = 'inline-block';
+        status.innerText = "Ready! Drag to solve.";
+        
+        drawGhostWave();
+        render();
+
+    } catch (e) {
+        status.innerText = "❌ ERROR: " + e.message;
+        console.error("Full Error Details:", e);
+    }
+}
 
         // THE "KILL ALL" SWITCH
         function stopEverything() {
@@ -133,4 +155,5 @@
         }
     </script>
 </body>
+
 </html>
