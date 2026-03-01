@@ -52,4 +52,144 @@
         /* THE VICTORY PULSE */
         @keyframes pulse {
             0% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0px #38bdf8; }
-            50% { transform: scale(
+            50% { transform: scale(1.03); filter: brightness(1.3); box-shadow: 0 0 30px #38bdf8; }
+            100% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0px #38bdf8; }
+        }
+        .victory { animation: pulse 2s infinite ease-in-out; }
+    </style>
+</head>
+<body>
+
+    <h1>Audio Jigsaw POC</h1>
+    
+    <div id="controls">
+        <button id="startBtn" onclick="initAudio()">INITIALIZE ENGINE</button>
+        <button id="refBtn" onclick="playReference()">PLAY FULL SONG</button>
+        <button id="stopBtn" onclick="stopEverything()">STOP ALL</button>
+    </div>
+
+    <div id="grid-container" id="main-container">
+        <canvas id="ghost-wave"></canvas>
+        <div id="grid"></div>
+    </div>
+
+    <p id="status">Ready to test...</p>
+
+    <script>
+        /* THE "PLUMBING" (JavaScript) */
+        let audioCtx, mainBuffer;
+        let activeSources = []; 
+        let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
+
+        async function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const status = document.getElementById('status');
+            status.innerText = "Fetching mysound.mp3...";
+            
+            try {
+                const resp = await fetch('./mysound.mp3');
+                if (!resp.ok) throw new Error("File not found. Check filename case!");
+                const data = await resp.arrayBuffer();
+                mainBuffer = await audioCtx.decodeAudioData(data);
+                
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('refBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                status.innerText = "Engine Live. Solve the puzzle!";
+                
+                drawGhostWave();
+                render();
+            } catch (e) {
+                status.innerText = "❌ Error: " + e.message;
+            }
+        }
+
+        function stopEverything() {
+            activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
+            activeSources = [];
+            document.getElementById('status').innerText = "Audio Terminated.";
+        }
+
+        function playSlice(idx) {
+            if (!mainBuffer) return;
+            stopEverything(); 
+            const source = audioCtx.createBufferSource();
+            source.buffer = mainBuffer;
+            const dur = mainBuffer.duration / 9;
+            source.connect(audioCtx.destination);
+            source.start(0, idx * dur, dur);
+            activeSources.push(source);
+        }
+
+        function playReference() {
+            if (!mainBuffer) return;
+            stopEverything();
+            const source = audioCtx.createBufferSource();
+            source.buffer = mainBuffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+            activeSources.push(source);
+            document.getElementById('status').innerText = "Playing Reference Track...";
+            source.onended = () => { if(activeSources.includes(source)) document.getElementById('status').innerText = "Reference ended."; };
+        }
+
+        function drawGhostWave() {
+            const canvas = document.getElementById('ghost-wave');
+            canvas.width = 380; canvas.height = 380;
+            const ctx = canvas.getContext('2d');
+            ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, 190);
+            for(let x=0; x<380; x++) {
+                ctx.lineTo(x, 190 + Math.sin(x*0.05)*40 + Math.cos(x*0.02)*20);
+            }
+            ctx.stroke();
+        }
+
+        function render() {
+            const grid = document.getElementById('grid');
+            const container = document.getElementById('grid-container');
+            grid.innerHTML = '';
+            
+            const isSolved = pieces.every((p, i) => p === i);
+
+            pieces.forEach((pIdx, i) => {
+                const div = document.createElement('div');
+                div.className = `piece ${pIdx === i ? 'correct' : ''}`;
+                div.draggable = true;
+                
+                const cvs = document.createElement('canvas');
+                cvs.width = 120; cvs.height = 120;
+                div.appendChild(cvs);
+                
+                const ctx = cvs.getContext('2d');
+                ctx.strokeStyle = pIdx === i ? '#38bdf8' : '#64748b';
+                ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 60);
+                for(let x=0; x<120; x++) {
+                    const gx = x + (pIdx * 120);
+                    ctx.lineTo(x, 60 + Math.sin(gx*0.05)*40 + Math.cos(gx*0.02)*20);
+                }
+                ctx.stroke();
+
+                div.onclick = () => playSlice(pIdx);
+                div.ondragstart = (e) => e.dataTransfer.setData('text', i);
+                div.ondragover = (e) => e.preventDefault();
+                div.ondrop = (e) => {
+                    const from = e.dataTransfer.getData('text');
+                    [pieces[from], pieces[i]] = [pieces[i], pieces[from]];
+                    playSlice(pIdx);
+                    render();
+                };
+                grid.appendChild(div);
+            });
+
+            if (isSolved) {
+                document.getElementById('status').innerText = "🎉 POC SUCCESS: HARMONY RESTORED";
+                container.classList.add('victory');
+                playReference();
+            } else {
+                container.classList.remove('victory');
+            }
+        }
+    </script>
+</body>
+</html>
