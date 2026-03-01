@@ -76,117 +76,141 @@
     <p id="status">Click Initialize to start...</p>
 
     <script>
-        let audioCtx, mainBuffer;
-        let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
-        const grid = document.getElementById('grid');
-        const status = document.getElementById('status');
+    let audioCtx, mainBuffer;
+    let currentSource = null; // This is our "Kill Switch" tracker
+    let pieces = [0,1,2,3,4,5,6,7,8].sort(() => Math.random() - 0.5);
+    const grid = document.getElementById('grid');
+    const status = document.getElementById('status');
 
-        async function initAudio() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            status.innerText = "Loading audio file...";
+    async function initAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        status.innerText = "Loading audio file...";
+        
+        try {
+            const resp = await fetch('./mysound.mp3');
+            const data = await resp.arrayBuffer();
+            mainBuffer = await audioCtx.decodeAudioData(data);
             
-            try {
-                // IMPORTANT: Ensure your file is named exactly mysound.mp3
-                const resp = await fetch('./mysound.mp3');
-                const data = await resp.arrayBuffer();
-                mainBuffer = await audioCtx.decodeAudioData(data);
-                
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('refBtn').style.display = 'inline-block';
-                status.innerText = "Audio Loaded. Arrange the pieces!";
-                
-                drawGhostWave();
-                render();
-            } catch (e) {
-                status.innerText = "Error: Cannot find 'mysound.mp3'. Is it in the folder?";
-                console.error(e);
-            }
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('refBtn').style.display = 'inline-block';
+            status.innerText = "Audio Loaded. Arrange the pieces!";
+            
+            drawGhostWave();
+            render();
+        } catch (e) {
+            status.innerText = "Error: Cannot find 'mysound.mp3'.";
+            console.error(e);
+        }
+    }
+
+    // New helper function to stop any current audio
+    function stopCurrentAudio() {
+        if (currentSource) {
+            currentSource.stop();
+            currentSource = null;
+        }
+    }
+
+    function playSlice(idx) {
+        if (!mainBuffer) return;
+        stopCurrentAudio(); // Stop previous sound before playing new slice
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = mainBuffer;
+        const dur = mainBuffer.duration / 9;
+        
+        source.connect(audioCtx.destination);
+        source.start(0, idx * dur, dur);
+        currentSource = source; // Track this source
+    }
+
+    function playReference() {
+        if (!mainBuffer) return;
+        
+        // If it's already playing, stop it and exit (Toggle behavior)
+        if (currentSource) {
+            stopCurrentAudio();
+            status.innerText = "Audio Stopped.";
+            return;
         }
 
-        function playSlice(idx) {
-            if (!mainBuffer) return;
-            const source = audioCtx.createBufferSource();
-            source.buffer = mainBuffer;
-            const dur = mainBuffer.duration / 9;
-            source.connect(audioCtx.destination);
-            source.start(0, idx * dur, dur);
-        }
+        const source = audioCtx.createBufferSource();
+        source.buffer = mainBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+        
+        currentSource = source; // Track this source
+        status.innerText = "👂 Playing Reference (Click again to stop)";
+        
+        source.onended = () => {
+            currentSource = null;
+            status.innerText = "Reconstruct the song!";
+        };
+    }
 
-        function playReference() {
-            const source = audioCtx.createBufferSource();
-            source.buffer = mainBuffer;
-            source.connect(audioCtx.destination);
-            source.start(0);
-            status.innerText = "👂 Listening to reference...";
-            source.onended = () => status.innerText = "Reconstruct the song!";
+    function drawGhostWave() {
+        const canvas = document.getElementById('ghost-wave');
+        canvas.width = 380; canvas.height = 380;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 190);
+        for(let x=0; x<380; x++) {
+            const y = 190 + Math.sin(x * 0.05) * 60 + Math.cos(x * 0.02) * 30;
+            ctx.lineTo(x, y);
         }
+        ctx.stroke();
+    }
 
-        function drawGhostWave() {
-            const canvas = document.getElementById('ghost-wave');
-            canvas.width = 380; canvas.height = 380;
-            const ctx = canvas.getContext('2d');
-            ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(0, 190);
-            // Draw a continuous wave across the whole grid area
-            for(let x=0; x<380; x++) {
-                const y = 190 + Math.sin(x * 0.05) * 60 + Math.cos(x * 0.02) * 30;
+    function render() {
+        grid.innerHTML = '';
+        const isSolved = pieces.every((p, i) => p === i);
+
+        pieces.forEach((pIdx, i) => {
+            const div = document.createElement('div');
+            div.className = `piece ${pIdx === i ? 'correct' : ''}`;
+            div.draggable = true;
+            
+            const cvs = document.createElement('canvas');
+            cvs.width = 120; cvs.height = 120;
+            div.appendChild(cvs);
+            
+            const ctx = cvs.getContext('2d');
+            ctx.strokeStyle = pIdx === i ? '#38bdf8' : '#64748b';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, 60);
+            for(let x=0; x<120; x++) {
+                const gx = x + (pIdx * 120);
+                const y = 60 + Math.sin(gx * 0.05) * 60 + Math.cos(gx * 0.02) * 30;
                 ctx.lineTo(x, y);
             }
             ctx.stroke();
+
+            div.onclick = () => {
+                playSlice(pIdx);
+                div.style.transform = "scale(0.95)";
+                setTimeout(() => div.style.transform = "scale(1)", 100);
+            };
+
+            div.ondragstart = (e) => e.dataTransfer.setData('text', i);
+            div.ondragover = (e) => e.preventDefault();
+            div.ondrop = (e) => {
+                const from = e.dataTransfer.getData('text');
+                [pieces[from], pieces[i]] = [pieces[i], pieces[from]];
+                playSlice(pIdx);
+                render();
+            };
+            
+            grid.appendChild(div);
+        });
+
+        if(isSolved) {
+            status.innerText = "🎉 PERFECT HARMONY!";
+            // Optional: Auto-play full track on win
+            if (!currentSource) playReference();
         }
-
-        function render() {
-            grid.innerHTML = '';
-            const isSolved = pieces.every((p, i) => p === i);
-
-            pieces.forEach((pIdx, i) => {
-                const div = document.createElement('div');
-                div.className = `piece ${pIdx === i ? 'correct' : ''}`;
-                div.draggable = true;
-                
-                const cvs = document.createElement('canvas');
-                cvs.width = 120; cvs.height = 120;
-                div.appendChild(cvs);
-                
-                // Draw piece waveform
-                const ctx = cvs.getContext('2d');
-                ctx.strokeStyle = pIdx === i ? '#38bdf8' : '#64748b';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(0, 60);
-                for(let x=0; x<120; x++) {
-                    const gx = x + (pIdx * 120);
-                    const y = 60 + Math.sin(gx * 0.05) * 60 + Math.cos(gx * 0.02) * 30;
-                    ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-
-                // Listen on click
-                div.onclick = () => {
-                    playSlice(pIdx);
-                    div.style.transform = "scale(0.95)";
-                    setTimeout(() => div.style.transform = "scale(1)", 100);
-                };
-
-                // Drag and Drop Logic
-                div.ondragstart = (e) => e.dataTransfer.setData('text', i);
-                div.ondragover = (e) => e.preventDefault();
-                div.ondrop = (e) => {
-                    const from = e.dataTransfer.getData('text');
-                    [pieces[from], pieces[i]] = [pieces[i], pieces[from]];
-                    playSlice(pIdx);
-                    render();
-                };
-                
-                grid.appendChild(div);
-            });
-
-            if(isSolved) {
-                status.innerText = "🎉 PERFECT HARMONY!";
-                playReference();
-            }
-        }
-    </script>
+    }
+</script>
 </body>
 </html>
+
