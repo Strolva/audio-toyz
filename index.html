@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Jigsaw Prototype</title>
+    <style>
+        /* THE "PAINT" (CSS) */
+        body { 
+            background: #0f172a; color: #38bdf8; font-family: sans-serif; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            min-height: 100vh; margin: 0; 
+        }
+        
+        #controls { margin-bottom: 20px; display: flex; gap: 10px; }
+        
+        button { 
+            padding: 12px 20px; border-radius: 8px; border: none; 
+            font-weight: bold; cursor: pointer; transition: 0.2s; 
+        }
+        #startBtn { background: #38bdf8; color: #0f172a; }
+        #refBtn { background: #22c55e; color: #fff; display: none; }
+        #stopBtn { background: #ef4444; color: #fff; display: none; }
+
+        #grid-container { 
+            position: relative; padding: 15px; background: #1e293b; 
+            border-radius: 12px; transition: all 0.5s ease;
+        }
+
+        /* The "Ghost" Reference Waveform */
+        #ghost-wave { 
+            position: absolute; top: 15px; left: 15px; 
+            width: 380px; height: 380px; opacity: 0.1; pointer-events: none; 
+        }
+
+        #grid { 
+            display: grid; grid-template-columns: repeat(3, 120px); 
+            gap: 10px; position: relative; 
+        }
+
+        .piece { 
+            width: 120px; height: 120px; background: rgba(51, 65, 85, 0.8); 
+            cursor: grab; border-radius: 8px; border: 2px solid transparent; 
+            overflow: hidden; transition: transform 0.1s;
+        }
+        .piece.correct { border-color: #38bdf8; }
+        
+        canvas { width: 100%; height: 100%; pointer-events: none; }
+
+        #status { margin-top: 20px; font-weight: bold; height: 20px; text-align: center; }
+
+        /* THE VICTORY PULSE */
+        @keyframes pulse {
+            0% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0px #38bdf8; }
+            50% { transform: scale(
